@@ -1,18 +1,23 @@
+import io
+import imghdr
+import json
+import traceback
+from typing import Dict, Any
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
-import io, httpx, os, json
-from google import genai
 from dotenv import load_dotenv
-load_dotenv()
+from google import genai
 
-client = genai.Client()
+load_dotenv() 
 
 app = FastAPI()
+client = genai.Client()
 
 class DocumentInput(BaseModel):
     document: HttpUrl 
 
-PROMPT_TEMPLATE = """USER:
+PROMPT= """USER:
 I will provide one or more PDF files (or file handles). Parse the PDFs and return exactly one JSON object that conforms to the following schema (no extra keys, JSON only):
 
 {
@@ -93,41 +98,119 @@ OUTPUT EXAMPLE (exact JSON structure; fill with real values based on the documen
 IMPORTANT: Return numbers as numeric JSON types (not strings). Strings must be JSON strings. All fields in the schema must be present.
 """    
 
+def detect_content_type_and_kind(url: str, content: bytes, headers: Dict[str, Any]):
+    ct = headers.get("content-type", "")
+    ct = ct.lower() if ct else ""
+    if "pdf" in ct:
+        return "application/pdf", "pdf"
+    if ct.startswith("image/"):
+        return ct, "image"
+
+    lower = url.lower()
+    if lower.endswith(".pdf"):
+        return "application/pdf", "pdf"
+    if any(lower.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp")):
+        if lower.endswith(".png"):
+            return "image/png", "image"
+        if lower.endswith(".jpg") or lower.endswith(".jpeg"):
+            return "image/jpeg", "image"
+        if lower.endswith(".tiff"):
+            return "image/tiff", "image"
+        if lower.endswith(".bmp"):
+            return "image/bmp", "image"
+        if lower.endswith(".gif"):
+            return "image/gif", "image"
+        if lower.endswith(".webp"):
+            return "image/webp", "image"
+
+    if content[:4] == b"%PDF":
+        return "application/pdf", "pdf"
+
+    img_type = imghdr.what(None, h=content)
+    if img_type:
+        mime_map = {
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "tiff": "image/tiff",
+            "bmp": "image/bmp",
+            "webp": "image/webp",
+        }
+        return mime_map.get(img_type, f"image/{img_type}"), "image"
+
+    return headers.get("content-type", "application/octet-stream"), "unknown"
+
+
 @app.post("/process-pdf")
-async def process_pdf(pdf: DocumentInput):
-    pdf_url = str(pdf.document)
+def analyze_file(payload: DocumentInput):
+    url = str(payload.document) 
+
     try:
-        r = httpx.get(pdf_url, timeout=60.0)
-        r.raise_for_status()
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client_http:
+            resp = client_http.get(url)
+            resp.raise_for_status()
+            content = resp.content
+            headers = resp.headers
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Cannot fetch PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Cannot fetch URL: {e}")
+    mime_type, kind = detect_content_type_and_kind(url, content, headers)
 
-    pdf_bytes = io.BytesIO(r.content)
+    if kind == "unknown":
+        raise HTTPException(status_code=400, detail="Could not determine file type (not PDF or image)")
+
     try:
-        file_obj = client.files.upload(file=pdf_bytes, config=dict(mime_type="application/pdf"))
+        file_buf = io.BytesIO(content)
+        uploaded = genai_files_upload(file_buf, mime_type)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload file to Gemini: {e}")
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to upload file to Gemini: {e}\n{tb}")
 
-    prompt = PROMPT_TEMPLATE
+    prompt = PROMPT
+    prompt = f"Detected file type: {kind} (mime: {mime_type}).\n{prompt}"
 
     try:
-        resp = client.models.generate_content(model="gemini-2.5-flash", contents=[file_obj, prompt])
+        resp = client.models.generate_content(model="gemini-2.5-flash", contents=[uploaded, prompt])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model call failed: {e}")
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Model call failed: {e}\n{tb}")
 
-    text = resp.text
+    text_out = resp.text if hasattr(resp, "text") else str(resp)
 
+    parsed_json = None
     try:
-        parsed = json.loads(text)
+        parsed_json = json.loads(text_out)
     except Exception:
         import re
-        m = re.search(r"\{(?:.|\n)*\}", text)
+        m = re.search(r"\{(?:.|\n)*\}", text_out)
         if m:
             try:
-                parsed = json.loads(m.group(0))
-            except Exception as ee:
-                raise HTTPException(status_code=500, detail=f"Returned text not valid JSON: {ee}\nFull output: {text[:1000]}")
-        else:
-            raise HTTPException(status_code=500, detail=f"Returned text not valid JSON. Output: {text[:1000]}")
+                parsed_json = json.loads(m.group(0))
+            except Exception:
+                parsed_json = None
+    if parsed_json is None:
+        failure_response = {
+            "is_success": False,
+            "token_usage": {
+                "total_tokens": -1,
+                "input_tokens": -1,
+                "output_tokens": -1
+            },
+            "data": {
+                "pagewise_line_items": [],
+                "total_item_count": 0
+            },
+            "model_raw_output": text_out 
+        }
+        raise HTTPException(status_code=502, detail=json.dumps(failure_response))
 
-    return parsed
+    return parsed_json
+def genai_files_upload(file_obj: io.BytesIO, mime_type: str):
+    """
+    Upload file bytes to Gemini developer files API and return the uploaded file handle/object
+    that can be passed to client.models.generate_content. Raises if client is in Vertex mode.
+    """
+    try:
+        uploaded = client.files.upload(file=file_obj, config={"mime_type": mime_type})
+        return uploaded
+    except Exception as e:
+        raise RuntimeError(f"genai files.upload failed: {e}")

@@ -5,3 +5,4 @@ requests
 google-genai
 httpx
 python-dotenv
+Pydantic
