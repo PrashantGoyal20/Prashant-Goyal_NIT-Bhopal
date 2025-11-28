@@ -30,7 +30,7 @@ I will provide one or more PDF files (or file handles). Parse the PDFs and retur
   "data": {
     "pagewise_line_items": [
       {
-        "page_no": "<string>",                   // page number as string (e.g., "1", "2") or "unknown"
+        "page_no": "<string>",                   // page number as string (e.g., "1", "2") depending upon the which image number u are parsing from the bundle of images that were provided
         "page_type": "Bill Detail | Final Bill | Pharmacy", // choose exactly one of these 3 labels
         "bill_items": [
           {
