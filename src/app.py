@@ -23,9 +23,9 @@ I will provide one or more PDF files (or file handles). Parse the PDFs and retur
 {
   "is_success": <boolean>,                       // true only if parsing succeeded and JSON schema is fully followed
   "token_usage": {
-    "total_tokens": <integer>,                   // cumulative tokens used by the model across calls if available; else -1
-    "input_tokens": <integer>,                   // input tokens if available; else -1
-    "output_tokens": <integer>                   // output tokens if available; else -1
+    "total_tokens": <integer>,                   // cumulative tokens used by the model across calls if available;
+    "input_tokens": <integer>,                   // input tokens in input; 
+    "output_tokens": <integer>                   // output tokens used in output;
   },
   "data": {
     "pagewise_line_items": [
