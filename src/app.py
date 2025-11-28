@@ -2,8 +2,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 import io, httpx, os, json
 from google import genai
+from dotenv import load_dotenv
+load_dotenv()
 
-client = genai.Client(vertexai=True, project="your-gcp-project-id", location="us-central1")
+client = genai.Client()
 
 app = FastAPI()
 
