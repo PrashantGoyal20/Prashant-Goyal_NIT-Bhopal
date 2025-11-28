@@ -2,3 +2,6 @@ boto3
 fastapi 
 uvicorn 
 requests
+google-genai
+httpx
+python-dotenv
