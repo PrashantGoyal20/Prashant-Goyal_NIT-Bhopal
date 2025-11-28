@@ -93,7 +93,7 @@ IMPORTANT: Return numbers as numeric JSON types (not strings). Strings must be J
 
 @app.post("/process-pdf")
 async def process_pdf(pdf: DocumentInput):
-    pdf_url = pdf.document
+    pdf_url = str(pdf.document)
     try:
         r = httpx.get(pdf_url, timeout=60.0)
         r.raise_for_status()
