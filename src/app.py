@@ -1,5 +1,5 @@
+from PIL import Image
 import io
-import imghdr
 import json
 import traceback
 from typing import Dict, Any
@@ -98,9 +98,8 @@ OUTPUT EXAMPLE (exact JSON structure; fill with real values based on the documen
 IMPORTANT: Return numbers as numeric JSON types (not strings). Strings must be JSON strings. All fields in the schema must be present.
 """    
 
-def detect_content_type_and_kind(url: str, content: bytes, headers: Dict[str, Any]):
-    ct = headers.get("content-type", "")
-    ct = ct.lower() if ct else ""
+def detect_file_type(url: str, content: bytes, headers):
+    ct = headers.get("content-type", "").lower()
     if "pdf" in ct:
         return "application/pdf", "pdf"
     if ct.startswith("image/"):
@@ -109,36 +108,29 @@ def detect_content_type_and_kind(url: str, content: bytes, headers: Dict[str, An
     lower = url.lower()
     if lower.endswith(".pdf"):
         return "application/pdf", "pdf"
-    if any(lower.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp")):
-        if lower.endswith(".png"):
-            return "image/png", "image"
-        if lower.endswith(".jpg") or lower.endswith(".jpeg"):
-            return "image/jpeg", "image"
-        if lower.endswith(".tiff"):
-            return "image/tiff", "image"
-        if lower.endswith(".bmp"):
-            return "image/bmp", "image"
-        if lower.endswith(".gif"):
-            return "image/gif", "image"
-        if lower.endswith(".webp"):
-            return "image/webp", "image"
+    if any(lower.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff")):
+        ext_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".webp": "image/webp",
+            ".tiff": "image/tiff",
+        }
+        return ext_map.get(lower[-5:], "image/jpeg"), "image"
 
     if content[:4] == b"%PDF":
         return "application/pdf", "pdf"
 
-    img_type = imghdr.what(None, h=content)
-    if img_type:
-        mime_map = {
-            "jpeg": "image/jpeg",
-            "png": "image/png",
-            "gif": "image/gif",
-            "tiff": "image/tiff",
-            "bmp": "image/bmp",
-            "webp": "image/webp",
-        }
-        return mime_map.get(img_type, f"image/{img_type}"), "image"
+    try:
+        img = Image.open(io.BytesIO(content))
+        mime = f"image/{img.format.lower()}"
+        return mime, "image"
+    except Exception:
+        pass
 
-    return headers.get("content-type", "application/octet-stream"), "unknown"
+    return "application/octet-stream", "unknown"
 
 
 @app.post("/process-pdf")
@@ -153,7 +145,7 @@ def analyze_file(payload: DocumentInput):
             headers = resp.headers
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Cannot fetch URL: {e}")
-    mime_type, kind = detect_content_type_and_kind(url, content, headers)
+    mime_type, kind = detect_file_type(url, content, headers)
 
     if kind == "unknown":
         raise HTTPException(status_code=400, detail="Could not determine file type (not PDF or image)")
