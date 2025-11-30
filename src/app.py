@@ -47,20 +47,20 @@ I will provide one or more PDF files (or file handles). Parse the PDFs and retur
 }
 
 RULES / INSTRUCTIONS:
-1. **Output only JSON** exactly matching the schema above. No explanations, no extra fields, no comments.
+1. Output only JSON exactly matching the schema above. No explanations, no extra fields, no comments.
 2. If parsing succeeded for all provided pages and the JSON follows schema -> set "is_success": true. If any required element is missing or the JSON cannot be produced in the required schema, set "is_success": false and still return a JSON object with token_usage fields filled as described and data fields set to empty arrays/zeros where appropriate.
-3. **Token usage**: if you are executed in an environment that provides token counts, place them in the integers. If you cannot determine token counts, set each token_usage entry to -1.
-4. **page_no**: use the page number from the PDF (1-indexed). If page number is unavailable, use the string "unknown".
-5. **page_type**: choose exactly one label per page from: `Bill Detail`, `Final Bill`, or `Pharmacy`. If unsure, pick the best match. Do not invent other labels.
-6. **bill_items extraction**: find all tabular line-items (rows with item description, qty, rate, amount). For each row:
+3. Token usage: if you are executed in an environment that provides token counts, place them in the integers. If you cannot determine token counts, set each token_usage entry to -1.
+4. page_no: use the page number from the PDF (1-indexed). If page number is unavailable, use the string "unknown".
+5. page_type: choose exactly one label per page from: `Bill Detail`, `Final Bill`, or `Pharmacy`. If unsure, pick the best match. Do not invent other labels.
+6. bill_items extraction: find all tabular line-items (rows with item description, qty, rate, amount). For each row:
    - `item_name`: copy the item description exactly as it appears (trim whitespace, join multi-line cells with single space).
    - `item_rate`, `item_quantity`, `item_amount`: return numeric floats. Remove currency symbols and commas. If the rate or quantity is not present or ambiguous, set that field to -1 for that item. `item_amount` should always be present if a row is a valid bill item; if missing set to -1.
-7. **Totals and summary**: do NOT place aggregated totals inside `bill_items`. Only include per-row fields in bill_items. The `total_item_count` must equal the count of all `bill_items` across pages.
-8. **Empty pages**: If a page has no bill items, include it with `"bill_items": []` and set `page_type` appropriately.
-9. **Precision**: return float values with up to two decimal places (e.g., 123.45). If input shows integer amounts, still return as float (e.g., 100 -> 100.0).
-10. **Failure behavior**: If parsing fails partially, still return the JSON with `is_success: false`. In `data.pagewise_line_items` include the pages you parsed successfully; for failed pages you may include an entry with `page_no` and an empty `bill_items` list.
-11. **Strict JSON only**: If model outputs anything other than a parseable JSON object exactly following the schema, the consumer will treat the response as failure. So make best effort to conform exactly.
-12. **Use the attached PDFs as examples**: data in these files may include multiple sections (Radiology, Bed charges, Pathology, Pharmacy). Classify pages with pharmacy line items as `Pharmacy`, pages showing diagnostic tests / final summary as `Final Bill` or `Bill Detail` appropriately. The three example files are provided for context (do not print their contents): train_sample_1.pdf, train_sample_2.pdf, train_sample_3.pdf. Use them as examples of layout and possible edge cases. :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5}
+7. Totals and summary: do NOT place aggregated totals inside `bill_items`. Only include per-row fields in bill_items. The `total_item_count` must equal the count of all `bill_items` across pages.
+8. Empty pages: If a page has no bill items, include it with `"bill_items": []` and set `page_type` appropriately.
+9. Precision: return float values with up to two decimal places (e.g., 123.45). If input shows integer amounts, still return as float (e.g., 100 -> 100.0).
+10. Failure behavior: If parsing fails partially, still return the JSON with `is_success: false`. In `data.pagewise_line_items` include the pages you parsed successfully; for failed pages you may include an entry with `page_no` and an empty `bill_items` list.
+11. Strict JSON only: If model outputs anything other than a parseable JSON object exactly following the schema, the consumer will treat the response as failure. So make best effort to conform exactly.
+12. Use the attached PDFs as examples: data in these files may include multiple sections (Radiology, Bed charges, Pathology, Pharmacy). Classify pages with pharmacy line items as `Pharmacy`, pages showing diagnostic tests / final summary as `Final Bill` or `Bill Detail` appropriately. The three example files are provided for context (do not print their contents): train_sample_1.pdf, train_sample_2.pdf, train_sample_3.pdf. Use them as examples of layout and possible edge cases. :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5}
 
 OUTPUT EXAMPLE (exact JSON structure; fill with real values based on the document):
 {

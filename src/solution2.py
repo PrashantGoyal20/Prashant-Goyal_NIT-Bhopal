@@ -294,7 +294,6 @@ def find_total_from_rows(rows_texts: List[str]):
     candidate = None
     for text in reversed(rows_texts):
         if re.search(r'\b(total|category total|grand total|net total|amount payable)\b', text, re.I):
-            # extract last number in this row
             v = parse_float_from_string(text)
             if v is not None:
                 candidate = v
