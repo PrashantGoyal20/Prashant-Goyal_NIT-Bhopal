@@ -133,7 +133,7 @@ def detect_file_type(url: str, content: bytes, headers):
     return "application/octet-stream", "unknown"
 
 
-@app.post("/process-pdf")
+@app.post("/process")
 def analyze_file(payload: DocumentInput):
     url = str(payload.document) 
 

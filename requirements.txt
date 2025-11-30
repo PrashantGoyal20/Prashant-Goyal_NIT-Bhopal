@@ -7,3 +7,7 @@ httpx
 python-dotenv
 Pydantic
 Pillow
+pymupdf==1.22.5
+opencv-python-headless
+pytesseract
+numpy
